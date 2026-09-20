@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>ATWAIS — Spatio-Temporal Weather Anomaly Monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Leaflet CSS & JS for Interactive Scrollable Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Plus Jakarta Sans', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+        colors: {
+          base: '#080e1b',
+          surface: '#161b29',
+          surface2: '#1a1f2d',
+          surface3: '#242a38',
+          edge: 'rgba(66,71,84,0.3)',
+          edgesoft: 'rgba(66,71,84,0.2)',
+          primary: '#dde2f5',
+          secondary: '#c2c6d6',
+          muted: '#8c909f',
+          blue: '#4d8eff',
+          bluelight: '#adc6ff',
+          bluedark: '#00285d',
+          bluedarker: '#002e6a',
+          green: '#4edea3',
+          amber: '#ffb95f',
+          amberdeep: '#ca8100',
+          amberdark: '#472a00',
+          red: '#ffb4ab',
+          reddark: '#690005',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html, body { background: #080e1b; }
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #dde2f5;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  #mainHeader { top: env(safe-area-inset-top, 0px); }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* thin dark scrollbars */
+  * { scrollbar-width: thin; scrollbar-color: #242a38 #0a0f1c; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: #242a38; border-radius: 8px; }
+  *::-webkit-scrollbar-thumb:hover { background: #2e3547; }
+
+  /* reusable UI components */
+  .card { background: #161b29; border-radius: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .55px; line-height: 14px; }
+  .label-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .55px; text-transform: uppercase; color: #8c909f; }
+  .icon-btn { display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px; color: #c2c6d6; transition: background .15s ease, color .15s ease; cursor: pointer; }
+  .icon-btn:hover { background: #1a1f2d; color: #dde2f5; }
+
+  .nav-link { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border-radius: 8px; color: #c2c6d6; font-size: 12px; font-weight: 600; letter-spacing: .24px; text-align: left; transition: background .15s ease, color .15s ease; cursor: pointer; }
+  .nav-link:hover { background: #1a1f2d; color: #dde2f5; }
+  .nav-link-active, .nav-link-active:hover { background: #4d8eff; color: #00285d; }
+  .nav-link svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  .seg-btn { flex: 1; text-align: center; padding: 6px 4px; border-radius: 4px; font-size: 12px; font-weight: 600; letter-spacing: .24px; color: #c2c6d6; transition: background .15s ease, color .15s ease; cursor: pointer; }
+  .seg-btn.is-active { background: #4d8eff; color: #00285d; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .seg-btn.is-active[data-variant="neutral"] { background: #242a38; color: #dde2f5; }
+
+  .layer-btn { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 12px; border-radius: 6px; background: #1a1f2d; color: #c2c6d6; transition: all .15s ease; cursor: pointer; }
+  .layer-btn:hover { filter: brightness(1.1); }
+  .layer-btn.is-active { background: #adc6ff; color: #002e6a; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .layer-btn .dot-off { width: 7.5px; height: 8px; border-radius: 12px; background: #002e6a; opacity: 0; }
+  .layer-btn.is-active .dot-off { opacity: 1; }
+
+  .expand-panel { max-height: 0; overflow: hidden; transition: max-height .25s ease, opacity .2s ease; opacity: 0; }
+  .expand-panel.expand-open { max-height: 240px; opacity: 1; }
+  .chevron-icon { transition: transform .2s ease; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin-once { animation: spin .9s linear; }
+  .animate-spin-infinite { animation: spin 1.2s linear infinite; }
+
+  @keyframes pulse-dot { 0%, 100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+  .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+  /* Interactive Beacon Marker */
+  .radar-beacon {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    pointer-events: none;
+  }
+  .radar-beacon-core {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    background: #4d8eff;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 14px #4d8eff, 0 0 28px rgba(77,142,255,0.6);
+    z-index: 2;
+  }
+  .radar-beacon-wave {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 36px;
+    height: 36px;
+    border: 2px solid #4d8eff;
+    border-radius: 50%;
+    animation: ripple 2s ease-out infinite;
+    opacity: 0.8;
+  }
+  .radar-beacon-wave-2 {
+    animation-delay: 1s;
+  }
+  @keyframes ripple {
+    0% { width: 14px; height: 14px; opacity: 0.9; }
+    100% { width: 64px; height: 64px; opacity: 0; }
+  }
+
+  /* Leaflet dark custom theme */
+  .leaflet-container {
+    background: #080e1b !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+  }
+  .leaflet-control-zoom {
+    display: none !important; /* using custom HUD controls */
+  }
+  .leaflet-control-attribution {
+    background: rgba(8, 14, 27, 0.75) !important;
+    color: #8c909f !important;
+    font-size: 9px !important;
+    backdrop-filter: blur(4px);
+    border-radius: 4px;
+    margin: 4px !important;
+  }
+  .leaflet-control-attribution a {
+    color: #adc6ff !important;
+  }
+  .map-tiles-dark {
+    filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(110%);
+  }
+  .leaflet-popup-content-wrapper {
+    background: #161b29 !important;
+    color: #dde2f5 !important;
+    border: 1px solid rgba(66,71,84,0.4) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.6) !important;
+  }
+  .leaflet-popup-tip {
+    background: #161b29 !important;
+  }
+
+  /* Mobile drawers */
+  @media (max-width: 1023px) {
+    #opsAside, #weatherControls {
+      position: fixed; top: 0; left: 0; height: 100dvh; z-index: 50;
+      transform: translateX(-110%); transition: transform .25s ease;
+      box-shadow: 20px 0 40px rgba(0,0,0,.6);
+      padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
+      padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+      overflow-y: auto;
+    }
+    #opsAside.drawer-open, #weatherControls.drawer-open { transform: translateX(0); }
+    #backdrop.backdrop-visible { display: block; }
+  }
+  #backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 40; backdrop-filter: blur(3px); }
+
+  input::placeholder { color: #8c909f; }
+  input:focus { outline: none; box-shadow: 0 0 0 2px rgba(77,142,255,0.45); }
+</style>
+</head>
+<body class="bg-base text-primary min-h-screen">
+
+<div id="backdrop"></div>
+
+<div class="min-h-screen flex flex-col">
+
+  <!-- ============ HEADER ============ -->
+  <header id="mainHeader" class="sticky top-0 z-30 backdrop-blur-md bg-[rgba(8,14,27,0.92)] border-b border-edge shadow-[0px_2px_12px_0px_rgba(0,0,0,0.6)]">
+    <div class="h-16 flex items-center justify-between gap-4 px-4 sm:px-5">
+      <div class="flex items-center gap-3 sm:gap-5 min-w-0">
+        <button id="menuBtn" class="icon-btn lg:hidden -ml-1" aria-label="Open navigation">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <div class="flex items-center gap-3 min-w-0">
+          <svg viewBox="0 0 32 32" class="w-8 h-8 shrink-0">
+            <defs>
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#4d8eff" />
+                <stop offset="100%" stop-color="#00285d" />
+              </linearGradient>
+            </defs>
+            <rect width="32" height="32" rx="9" fill="url(#logoGrad)" />
+            <circle cx="16" cy="16" r="9" fill="none" stroke="#adc6ff" stroke-width="1.4" opacity="0.55" />
+            <circle cx="16" cy="16" r="5" fill="none" stroke="#dde2f5" stroke-width="1.5" />
+            <circle cx="16" cy="16" r="1.7" fill="#dde2f5" />
+          </svg>
+          <div class="min-w-0">
+            <p class="text-[16px] font-semibold leading-[20px] text-primary truncate">ATWAIS</p>
+            <p class="text-[12px] font-semibold leading-[12px] text-secondary truncate hidden sm:block">AI-Powered Weather Anomaly Monitoring</p>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-2 bg-surface2 rounded-xl px-3 py-1 border border-edge">
+          <span class="relative flex w-2 h-2">
+            <span class="pulse-dot absolute inline-flex w-full h-full rounded-full bg-green"></span>
+            <span class="relative inline-flex rounded-full w-2 h-2 bg-green"></span>
+          </span>
+          <span id="systemStatusBadge" class="pill !p-0 text-green">SYSTEM: ONLINE (API SYNCED)</span>
+        </div>
+      </div>
+
+      <!-- Quick Search Bar -->
+      <div class="hidden md:flex flex-1 justify-center max-w-[420px] relative">
+        <div class="relative w-full max-w-[320px]">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-muted absolute left-3 top-1/2 -translate-y-1/2"></i>
+          <input id="headerSearchInput" type="text" placeholder="Search city, region, or coordinates…" class="w-full bg-base border border-edge rounded-lg pl-9 pr-3 py-2 text-[12px] font-semibold tracking-[0.24px] text-primary" />
+        </div>
+        <div id="headerSearchResults" class="hidden absolute top-11 w-full max-w-[320px] card border border-edge shadow-2xl p-1.5 z-50 flex flex-col gap-1 text-xs"></div>
+      </div>
+
+      <div class="flex items-center gap-1 sm:gap-3 shrink-0">
+        <div class="relative">
+          <button id="bellBtn" class="icon-btn relative" aria-label="Notifications">
+            <i data-lucide="bell" class="w-4 h-4"></i>
+            <span id="bellBadge" class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red ring-2 ring-base"></span>
+          </button>
+          <div id="bellDropdown" class="hidden absolute right-0 mt-2 w-72 card border border-edge shadow-2xl p-2 z-50">
+            <p class="label-eyebrow px-2 py-1">Active Alerts (<span id="alertCountBadge">2</span>)</p>
+            <div id="alertNotificationList" class="flex flex-col gap-1">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+        <button id="helpBtn" class="icon-btn" title="API Status & Controls" aria-label="Help">
+          <i data-lucide="circle-help" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex flex-1 min-h-0">
+
+    <!-- ============ ASIDE: OPERATIONAL SCOPES ============ -->
+    <aside id="opsAside" class="w-64 shrink-0 bg-base border-r border-edgesoft flex flex-col justify-between py-5 lg:translate-x-0">
+      <div class="px-3 flex flex-col gap-5">
+        <div class="flex items-center justify-between px-2">
+          <p class="label-eyebrow">Operational Scopes</p>
+          <button id="closeAsideBtn" class="icon-btn lg:hidden" aria-label="Close navigation">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <nav class="flex flex-col gap-1">
+          <a href="#" class="nav-link nav-link-active"><i data-lucide="target"></i>Spatial Anomaly Canvas</a>
+          <a href="#" class="nav-link"><i data-lucide="trending-up"></i>Temporal Inspector</a>
+          <a href="#" class="nav-link"><i data-lucide="triangle-alert"></i>Incident Matrix</a>
+          <a href="#" class="nav-link"><i data-lucide="share-2"></i>Predictive Ensemble</a>
+          <a href="#" class="nav-link"><i data-lucide="radio"></i>Ground Telemetry</a>
+        </nav>
+      </div>
+      <div class="px-3 flex flex-col gap-1">
+        <div class="bg-surface rounded-lg p-3 flex flex-col gap-2 border border-edge">
+          <div class="flex items-center justify-between">
+            <span class="mono text-[11px] tracking-[.55px] text-secondary">ACTIVE API</span>
+            <span id="activeProviderLabel" class="mono text-[11px] tracking-[.55px] text-green">OPEN-METEO</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="mono text-[11px] tracking-[.55px] text-secondary">LATENCY</span>
+            <span id="apiLatencyLabel" class="mono text-[11px] tracking-[.55px] text-green">24ms</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="mono text-[11px] tracking-[.55px] text-secondary">RADAR STATUS</span>
+            <span class="mono text-[11px] tracking-[.55px] text-primary">DOPPLER LIVE</span>
+          </div>
+        </div>
+        <a href="file:///c:/Users/pdhar/Downloads/Wheather/README.md" target="_blank" class="nav-link text-muted hover:text-primary"><i data-lucide="book-open" class="!w-[13.5px] !h-[13.5px]"></i>Documentation &amp; Setup</a>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="flex-1 min-w-0">
+      <div class="p-4 sm:p-5 flex flex-col gap-5">
+
+        <!-- Top status bar -->
+        <div class="card border border-edge shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3">
+          <div class="flex items-center gap-3">
+            <button id="filtersBtn" class="lg:hidden bg-blue p-2 rounded shrink-0" aria-label="Open weather controls">
+              <i data-lucide="sliders-horizontal" class="w-[15px] h-[15px] text-bluedark"></i>
+            </button>
+            <div class="hidden lg:flex bg-blue p-1.5 rounded items-center justify-center shrink-0 shadow">
+              <i data-lucide="radar" class="w-[16px] h-[16px] text-bluedark"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h1 class="text-[16px] font-semibold leading-6 text-primary">Spatio-Temporal Anomaly Tracker</h1>
+                <span id="liveStatusPill" class="pill bg-[rgba(255,180,171,0.15)] text-red border border-[rgba(255,180,171,0.2)]">
+                  <span class="w-1.5 h-1.5 rounded-full bg-red animate-pulse"></span>LIVE VIGILANCE
+                </span>
+              </div>
+              <p id="gridCoordinatesText" class="mono text-[11px] tracking-[.55px] text-secondary mt-0.5">
+                Grid Cell: 13.0827°N, 80.2707°E • Southwest Bay of Bengal Sector
+              </p>
+            </div>
+          </div>
+          <div class="bg-surface2 rounded-xl px-3 py-1.5 flex items-center gap-1.5 border border-edge self-start sm:self-auto">
+            <span class="mono text-[11px] tracking-[.55px] text-secondary">Synced:</span>
+            <span id="syncedTime" class="mono text-[11px] font-bold tracking-[.55px] text-green">--:--:-- IST</span>
+          </div>
+        </div>
+
+        <!-- Workspace split -->
+        <div class="flex gap-5 items-start">
+
+          <!-- Weather Controls sidebar -->
+          <aside id="weatherControls" class="w-[264px] shrink-0 card border border-edge shadow-lg p-5 flex flex-col gap-3 lg:translate-x-0">
+            <div class="flex items-center justify-between pb-1">
+              <div class="flex items-center gap-2">
+                <i data-lucide="sliders-horizontal" class="w-[15px] h-[15px] text-secondary"></i>
+                <h2 class="text-[16px] font-semibold leading-6 text-primary">Weather Controls</h2>
+              </div>
+              <button id="resetControlsBtn" class="icon-btn" title="Reset Location" aria-label="Reset controls">
+                <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+
+            <!-- Target Surveillance Zone Search -->
+            <div class="flex flex-col gap-1.5 pt-1 relative">
+              <p class="label-eyebrow">Target Surveillance Zone</p>
+              <div class="relative">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-secondary absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input id="zoneSearchInput" type="text" value="Chennai, Tamil Nadu" autocomplete="off" class="w-full bg-base border border-edge rounded pl-9 pr-8 py-2 text-[12px] font-semibold tracking-[0.24px] text-primary shadow-[inset_0px_2px_4px_0px_rgba(0,0,0,0.15)]" />
+                <button id="searchSubmitBtn" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-primary">
+                  <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                </button>
+              </div>
+              <div id="zoneSearchResults" class="hidden absolute top-16 left-0 right-0 card border border-edge shadow-2xl p-1.5 z-50 flex flex-col gap-1 text-xs max-h-48 overflow-y-auto"></div>
+              
+              <!-- Quick Cities Chips -->
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                <button class="city-chip bg-surface3 hover:bg-surface2 rounded-xl px-2.5 py-1 mono text-[11px] tracking-[.55px] text-primary transition" data-city="Chennai" data-lat="13.0827" data-lon="80.2707">Chennai</button>
+                <button class="city-chip bg-surface3 hover:bg-surface2 rounded-xl px-2.5 py-1 mono text-[11px] tracking-[.55px] text-primary transition" data-city="Mumbai" data-lat="19.0760" data-lon="72.8777">Mumbai</button>
+                <button class="city-chip bg-surface3 hover:bg-surface2 rounded-xl px-2.5 py-1 mono text-[11px] tracking-[.55px] text-primary transition" data-city="Delhi" data-lat="28.6139" data-lon="77.2090">Delhi</button>
+                <button class="city-chip bg-surface3 hover:bg-surface2 rounded-xl px-2.5 py-1 mono text-[11px] tracking-[.55px] text-primary transition" data-city="Bengaluru" data-lat="12.9716" data-lon="77.5946">Bengaluru</button>
+                <button class="city-chip bg-surface3 hover:bg-surface2 rounded-xl px-2.5 py-1 mono text-[11px] tracking-[.55px] text-primary transition" data-city="Kolkata" data-lat="22.5726" data-lon="88.3639">Kolkata</button>
+              </div>
+            </div>
+
+            <!-- Active Telemetry Layer Selection -->
+            <div class="flex flex-col gap-1.5 pt-1" data-group="layer">
+              <p class="label-eyebrow">Active Telemetry Layer</p>
+              <button data-option data-layer-type="radar" class="layer-btn is-active">
+                <span class="flex items-center gap-3">
+                  <i data-lucide="droplets" class="w-3.5 h-[15px]"></i>
+                  <span class="text-[12px] font-medium tracking-[0.24px] text-left leading-4">Precipitation &amp; Doppler</span>
+                </span>
+                <span class="dot-off"></span>
+              </button>
+              <button data-option data-layer-type="wind" class="layer-btn">
+                <span class="flex items-center gap-3">
+                  <i data-lucide="wind" class="w-[15px] h-[13px]"></i>
+                  <span class="text-[12px] font-semibold tracking-[0.24px] text-left leading-4">Wind Speed &amp; Gusts</span>
+                </span>
+                <span id="ctrlWindLabel" class="mono text-[11px] tracking-[.55px] text-muted text-right leading-[14px]">--<br />km/h</span>
+              </button>
+              <button data-option data-layer-type="temp" class="layer-btn">
+                <span class="flex items-center gap-3">
+                  <i data-lucide="thermometer" class="w-[13.5px] h-[13.5px]"></i>
+                  <span class="text-[12px] font-semibold tracking-[0.24px] text-left leading-4">Surface Temperature</span>
+                </span>
+                <span id="ctrlTempLabel" class="mono text-[11px] tracking-[.55px] text-muted">--°C</span>
+              </button>
+              <button data-option data-layer-type="anomaly" class="layer-btn !bg-[rgba(202,129,0,0.25)] !text-amber hover:!bg-[rgba(202,129,0,0.35)]">
+                <span class="flex items-center gap-3">
+                  <i data-lucide="triangle-alert" class="w-[15px] h-[15px]"></i>
+                  <span class="text-[12px] font-medium tracking-[0.24px] text-left leading-4">Weather Anomaly Index</span>
+                </span>
+                <span id="ctrlAnomalyLabel" class="pill bg-[rgba(255,185,95,0.2)] text-amber font-bold">--σ</span>
+              </button>
+            </div>
+
+            <!-- Temporal Horizon -->
+            <div class="flex flex-col gap-1.5 pt-1" data-group="horizon">
+              <p class="label-eyebrow">Temporal Horizon</p>
+              <div class="bg-base rounded p-1 flex gap-1 border border-edge">
+                <button data-option data-variant="neutral" class="seg-btn">1 Day</button>
+                <button data-option data-variant="neutral" class="seg-btn is-active">3 Days</button>
+                <button data-option data-variant="neutral" class="seg-btn">7 Days</button>
+              </div>
+            </div>
+
+            <!-- Base Projection Map Style -->
+            <div class="flex flex-col gap-1.5 pt-1" data-group="projection">
+              <p class="label-eyebrow">Base Map Projection</p>
+              <div class="bg-base rounded p-1 flex gap-1 border border-edge">
+                <button id="projDarkBtn" data-option data-variant="neutral" class="seg-btn is-active" data-proj="dark">Dark</button>
+                <button id="projSatBtn" data-option data-variant="neutral" class="seg-btn" data-proj="satellite">Satellite</button>
+                <button id="projStreetBtn" data-option data-variant="neutral" class="seg-btn" data-proj="street">Street</button>
+              </div>
+            </div>
+
+            <!-- Recalculate Button -->
+            <button id="applyFiltersBtn" class="mt-1 bg-bluelight hover:brightness-105 active:scale-[0.99] transition rounded flex items-center justify-center gap-2 py-3 shadow-lg disabled:opacity-70 cursor-pointer">
+              <i data-lucide="refresh-cw" class="refresh-icon w-3.5 h-3.5 text-bluedarker"></i>
+              <span class="apply-label text-[12px] font-bold tracking-[.3px] text-bluedarker">Refresh Telemetry</span>
+            </button>
+
+            <!-- Advanced Analytics Accordion -->
+            <button class="expand-toggle bg-surface2 rounded flex items-center justify-between p-2 mt-1 border border-edge cursor-pointer">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="cpu" class="w-3.5 h-3.5 text-secondary"></i>
+                <span class="mono text-[11px] tracking-[.55px] text-secondary">GNN Diffusion Mesh</span>
+              </span>
+              <i data-lucide="chevron-down" class="chevron-icon w-2.5 h-2.5 text-secondary"></i>
+            </button>
+            <div class="expand-panel">
+              <div class="flex flex-col gap-2 pt-2 pb-1 px-1">
+                <div class="flex items-center justify-between">
+                  <span class="mono text-[11px] text-muted tracking-[.55px]">Ensemble Members</span>
+                  <span class="mono text-[11px] text-primary tracking-[.55px]">51</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="mono text-[11px] text-muted tracking-[.55px]">Grid Resolution</span>
+                  <span class="mono text-[11px] text-primary tracking-[.55px]">1.5 km</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="mono text-[11px] text-muted tracking-[.55px]">Mesh Model</span>
+                  <span class="mono text-[11px] text-primary tracking-[.55px]">Diffusion-v4</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <!-- Center content -->
+          <div class="flex-1 min-w-0 flex flex-col gap-4">
+
+            <!-- 4 summary cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              
+              <!-- Card 1: Target Zone -->
+              <div class="card border border-edge shadow-sm p-4 flex flex-col justify-between">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="label-eyebrow">Target Zone</p>
+                    <p id="kpiTargetZone" class="text-[16px] font-semibold leading-6 text-primary pt-0.5 truncate">Chennai, TN</p>
+                  </div>
+                  <i data-lucide="map-pin" class="w-[19px] h-[19px] text-secondary"></i>
+                </div>
+                <div class="pt-3 flex flex-col gap-1">
+                  <span id="kpiConditionPill" class="pill bg-[rgba(202,129,0,0.3)] text-amber w-fit">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber"></span><span id="kpiConditionText">Heavy Rain</span>
+                  </span>
+                  <p id="kpiRadarStation" class="mono text-[11px] tracking-[.55px] text-muted leading-[14px] pt-1">Radar: CHN-Doppler-04</p>
+                </div>
+              </div>
+
+              <!-- Card 2: Thermal Deviation -->
+              <div class="card border border-edge shadow-sm p-4 flex flex-col justify-between">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="label-eyebrow leading-[14px]">Thermal<br />Deviation</p>
+                    <p class="pt-1 flex items-baseline gap-1.5">
+                      <span id="kpiTempC" class="text-[28px] font-bold tracking-[-0.84px] text-primary leading-8">--°C</span>
+                      <span id="kpiTempK" class="mono text-[11px] tracking-[.55px] text-muted leading-[14px]">/ -- K</span>
+                    </p>
+                  </div>
+                  <i data-lucide="thermometer" class="w-[18px] h-[18px] text-secondary mt-1"></i>
+                </div>
+                <div class="pt-3 flex flex-col gap-1">
+                  <span id="kpiThermalPill" class="pill bg-[rgba(255,180,171,0.15)] text-red w-fit font-semibold">
+                    <span class="w-1.5 h-1.5 rounded-full bg-red"></span><span id="kpiThermalDeviation">+2.4°C Above Normal</span>
+                  </span>
+                  <p id="kpiHumidity" class="mono text-[11px] tracking-[.55px] text-muted leading-[14px] pt-1">Relative Humidity: 88%</p>
+                </div>
+              </div>
+
+              <!-- Card 3: 24H Precipitation -->
+              <div class="card border border-edge shadow-sm p-4 flex flex-col justify-between">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="label-eyebrow leading-[14px]">24H<br />Precipitation</p>
+                    <p class="pt-1 flex items-baseline gap-1.5">
+                      <span id="kpiPrecipVal" class="text-[28px] font-bold tracking-[-0.84px] text-bluelight leading-8">--</span>
+                      <span class="mono text-[11px] tracking-[.55px] text-secondary">mm</span>
+                    </p>
+                  </div>
+                  <i data-lucide="cloud-rain" class="w-[18px] h-[18px] text-secondary"></i>
+                </div>
+                <div class="pt-3 flex flex-col gap-1">
+                  <span id="kpiPeakSurgePill" class="pill bg-[rgba(77,142,255,0.25)] text-bluelight w-fit">
+                    <i data-lucide="clock" class="w-2.5 h-2.5"></i><span id="kpiPeakSurgeText">Peak Surge at 18:00</span>
+                  </span>
+                  <p id="kpiWindInfo" class="mono text-[11px] tracking-[.55px] text-muted leading-[14px] pt-1">Wind: 28 km/h • Gusts 45 km/h</p>
+                </div>
+              </div>
+
+              <!-- Card 4: Anomaly Risk Level -->
+              <div class="card border border-edge shadow-sm p-4 flex flex-col justify-between">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="label-eyebrow leading-[14px]">Anomaly Risk<br />Level</p>
+                    <p id="kpiRiskLevelText" class="text-[28px] font-bold tracking-[-0.56px] text-red leading-9 pt-0.5">High Risk</p>
+                  </div>
+                  <span class="relative flex w-4 h-4 mt-1 shrink-0">
+                    <span id="riskPulseRing" class="pulse-dot absolute inline-flex w-full h-full rounded-full bg-red opacity-60"></span>
+                    <span id="riskDotCore" class="relative inline-flex rounded-full w-4 h-4 bg-red"></span>
+                  </span>
+                </div>
+                <div class="pt-3 flex flex-col gap-1">
+                  <span id="kpiRiskBadge" class="pill bg-red text-reddark w-fit font-bold shadow-sm">
+                    <i data-lucide="triangle-alert" class="w-2.5 h-2.5"></i><span id="kpiRiskActionText">Action Required</span>
+                  </span>
+                  <p id="kpiRiskProtocol" class="mono text-[11px] tracking-[.55px] text-muted leading-[14px] pt-1">Disaster Protocols Active</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- ============ INTERACTIVE SCROLLABLE MAP VIEW ============ -->
+            <div id="mapWrapper" class="relative rounded-lg overflow-hidden shadow-2xl h-[420px] sm:h-[480px] lg:h-[540px] border border-edge">
+              <!-- Leaflet Map Canvas Container (Scrollable, Zoomable, Pannable) -->
+              <div id="leafletMap" class="w-full h-full z-0"></div>
+
+              <!-- Storm & Live Sector Tracker Banner -->
+              <div id="mapBanner" class="absolute left-3 top-3 z-[400] max-w-[92%] sm:max-w-[420px] backdrop-blur-md bg-[rgba(8,14,27,0.88)] border-l-4 border-red rounded-lg shadow-2xl flex items-center gap-3 pl-4 pr-3 py-2.5 border-y border-r border-edge">
+                <i id="bannerIcon" data-lucide="target" class="w-5 h-5 text-red shrink-0"></i>
+                <div class="min-w-0">
+                  <p id="bannerTitle" class="text-[15px] font-semibold leading-5 text-primary truncate">Sector Anomaly Active</p>
+                  <p id="bannerSubtitle" class="mono text-[11px] tracking-[.55px] text-amber truncate mt-0.5">Scroll or Click anywhere on the map to inspect weather</p>
+                </div>
+              </div>
+
+              <!-- Floating Map HUD Quick Action Controls (Top Right) -->
+              <div class="absolute right-3 top-3 z-[400] backdrop-blur-md bg-[rgba(8,14,27,0.85)] border border-edge rounded-lg shadow-xl p-1.5 flex flex-col gap-1.5">
+                <button id="mapZoomInBtn" class="icon-btn !p-2 hover:text-white" title="Zoom In (Scroll up with mouse wheel)" aria-label="Zoom In">
+                  <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+                <button id="mapZoomOutBtn" class="icon-btn !p-2 hover:text-white" title="Zoom Out (Scroll down with mouse wheel)" aria-label="Zoom Out">
+                  <i data-lucide="minus" class="w-4 h-4"></i>
+                </button>
+                <div class="h-px bg-surface3 mx-1"></div>
+                <button id="mapToggleLayersBtn" class="icon-btn !p-2 hover:text-white" title="Switch Tile Layer (Satellite / Street / Dark)" aria-label="Toggle Layers">
+                  <i data-lucide="layers" class="w-4 h-4"></i>
+                </button>
+                <button id="mapRecenterBtn" class="icon-btn !p-2 hover:text-white" title="Recenter on Target" aria-label="Recenter">
+                  <i data-lucide="crosshair" class="w-4 h-4"></i>
+                </button>
+              </div>
+
+              <!-- Quick Layer Switcher Dropdown (Floating) -->
+              <div id="layerPopup" class="hidden absolute right-14 top-3 z-[400] backdrop-blur-md bg-[rgba(8,14,27,0.95)] border border-edge rounded-lg shadow-2xl p-2.5 flex flex-col gap-1 w-44 text-xs">
+                <p class="label-eyebrow px-2 py-1">Map View Style</p>
+                <button data-quick-layer="dark" class="layer-item text-left px-2.5 py-1.5 rounded hover:bg-surface2 flex items-center justify-between text-bluelight font-semibold">
+                  <span>Dark Tactical</span>
+                  <i data-lucide="check" class="w-3.5 h-3.5 text-blue"></i>
+                </button>
+                <button data-quick-layer="satellite" class="layer-item text-left px-2.5 py-1.5 rounded hover:bg-surface2 flex items-center justify-between text-secondary">
+                  <span>Satellite View</span>
+                </button>
+                <button data-quick-layer="street" class="layer-item text-left px-2.5 py-1.5 rounded hover:bg-surface2 flex items-center justify-between text-secondary">
+                  <span>Street &amp; Cities</span>
+                </button>
+                <div class="h-px bg-surface3 my-1"></div>
+                <label class="flex items-center justify-between px-2.5 py-1 cursor-pointer select-none">
+                  <span class="text-secondary text-[11px] font-medium">Doppler Overlay</span>
+                  <input id="toggleRadarCheck" type="checkbox" checked class="accent-blue rounded" />
+                </label>
+              </div>
+
+              <!-- Map Legend (Bottom Left) -->
+              <div class="absolute left-3 bottom-3 z-[400] backdrop-blur-md bg-[rgba(8,14,27,0.9)] border border-edge rounded-lg shadow-xl px-3 py-2 flex flex-col gap-1 max-w-[92%]">
+                <p class="label-eyebrow text-[10px]">Radar Anomaly Intensity (dBZ)</p>
+                <div class="flex flex-wrap gap-2.5">
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-green"></span><span class="mono text-[10px] text-secondary">Normal</span></span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber"></span><span class="mono text-[10px] text-secondary">Moderate</span></span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amberdeep"></span><span class="mono text-[10px] text-secondary">High</span></span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-red"></span><span class="mono text-[10px] font-semibold text-red">Severe</span></span>
+                </div>
+              </div>
+
+              <!-- HUD Coordinates and Zoom (Bottom Right) -->
+              <div class="hidden sm:flex absolute right-3 bottom-3 z-[400] backdrop-blur-md bg-[rgba(8,14,27,0.85)] border border-edge rounded px-3 py-1.5 items-center gap-2">
+                <span id="hudZoomText" class="mono text-[11px] tracking-[.55px] text-muted">ZOOM: 7.0x</span>
+                <span class="mono text-[11px] text-muted">•</span>
+                <span id="hudCoordsText" class="mono text-[11px] tracking-[.55px] text-primary">13.08°N, 80.27°E</span>
+              </div>
+            </div>
+
+            <!-- Below map: two-column grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+              <!-- LEFT column: trend chart + 3-day forecast -->
+              <div class="lg:col-span-7 flex flex-col gap-5">
+                
+                <!-- 24-Hour Anomaly Intensity Chart -->
+                <div class="card border border-edge shadow-sm px-3 sm:px-5 py-5 flex flex-col gap-4">
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                      <h3 class="text-[16px] font-semibold leading-6 text-primary">24-Hour Anomaly Intensity Index</h3>
+                      <span id="chartPeakPill" class="pill bg-surface2 border border-edge text-amber">
+                        <i data-lucide="clock" class="w-3 h-3"></i><span id="chartPeakText">Peak Window: 18:00</span>
+                      </span>
+                    </div>
+                    <p class="mono text-[11px] tracking-[.55px] text-muted">Computed dynamically via Hourly Temperature &amp; Precipitation Vectors</p>
+                  </div>
+
+                  <!-- Dynamic SVG Chart Container -->
+                  <div class="w-full overflow-hidden">
+                    <svg id="hourlyTrendSvg" viewBox="0 0 700 214" class="w-full h-[210px] sm:h-[224px]">
+                      <defs>
+                        <linearGradient id="curveStroke" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stop-color="#4edea3" />
+                          <stop offset="28%" stop-color="#ffb95f" />
+                          <stop offset="52%" stop-color="#ffb4ab" />
+                          <stop offset="76%" stop-color="#ffb95f" />
+                          <stop offset="100%" stop-color="#ca8100" />
+                        </linearGradient>
+                        <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stop-color="#ffb4ab" stop-opacity="0.28" />
+                          <stop offset="100%" stop-color="#ffb4ab" stop-opacity="0" />
+                        </linearGradient>
+                      </defs>
+
+                      <!-- y gridlines -->
+                      <line x1="58" y1="18" x2="692" y2="18" stroke="rgba(255,255,255,0.06)" />
+                      <line x1="58" y1="71" x2="692" y2="71" stroke="rgba(255,255,255,0.06)" />
+                      <line x1="58" y1="124" x2="692" y2="124" stroke="rgba(255,255,255,0.06)" />
+                      <line x1="58" y1="177" x2="692" y2="177" stroke="rgba(255,255,255,0.06)" />
+                      <text x="0" y="22" class="mono" font-size="9.5" fill="#ffb4ab" font-weight="700">Severe</text>
+                      <text x="0" y="75" class="mono" font-size="9.5" fill="#ca8100">High</text>
+                      <text x="0" y="128" class="mono" font-size="9.5" fill="#ffb95f">Moderate</text>
+                      <text x="0" y="181" class="mono" font-size="9.5" fill="#4edea3">Normal</text>
+
+                      <!-- Baseline -->
+                      <line x1="58" y1="157" x2="692" y2="157" stroke="#8c909f" stroke-width="1" stroke-dasharray="3 4" />
+                      <text x="415" y="152" class="mono" font-size="8.8" fill="#8c909f">Seasonal Baseline (σ=0)</text>
+
+                      <!-- Curve path and fill generated dynamically -->
+                      <path id="svgCurveFill" d="" fill="url(#curveFill)" />
+                      <path id="svgCurveStroke" d="" fill="none" stroke="url(#curveStroke)" stroke-width="2.5" stroke-linecap="round" />
+                      
+                      <!-- Peak Marker -->
+                      <g id="svgPeakMarker" transform="translate(434, 28)">
+                        <circle cx="0" cy="0" r="8" fill="rgba(255,180,171,0.3)" />
+                        <circle cx="0" cy="0" r="3.5" fill="#ffb4ab" />
+                      </g>
+
+                      <!-- Dynamic X Labels -->
+                      <g id="svgXLabels">
+                        <text x="58" y="205" text-anchor="start" class="mono" font-size="11" fill="#8c909f">00:00</text>
+                        <text x="200" y="205" text-anchor="middle" class="mono" font-size="11" fill="#8c909f">06:00</text>
+                        <text x="342" y="205" text-anchor="middle" class="mono" font-size="11" fill="#8c909f">12:00</text>
+                        <text x="434" y="205" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#ffb4ab">18:00 (Peak)</text>
+                        <text x="562" y="205" text-anchor="middle" class="mono" font-size="11" fill="#8c909f">24:00</text>
+                        <text x="692" y="205" text-anchor="end" class="mono" font-size="11" fill="#8c909f">+06:00</text>
+                      </g>
+                    </svg>
+                  </div>
+                </div>
+
+                <!-- 3-Day Forecast Cards -->
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-[16px] font-semibold leading-6 text-primary">3-Day Forecast Telemetry</h3>
+                    <span class="mono text-[9px] tracking-[.55px] text-muted uppercase">Deterministic Run + Ensemble</span>
+                  </div>
+                  <div id="forecastCardsGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <!-- Populated dynamically -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- RIGHT column: alerts + AI panel -->
+              <div class="lg:col-span-5 flex flex-col gap-5">
+                
+                <!-- Active Weather Alerts -->
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-[16px] font-semibold leading-6 text-primary">Active Weather Alerts</h3>
+                    <span id="alertsSummaryPill" class="pill bg-[rgba(255,180,171,0.15)] text-red font-bold">-- Issued</span>
+                  </div>
+
+                  <div id="alertsContainer" class="flex flex-col gap-3">
+                    <!-- Populated dynamically -->
+                  </div>
+                </div>
+
+                <!-- AI Weather Insights Card -->
+                <div class="card border border-edge shadow-sm p-5 flex flex-col gap-3">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="bg-[rgba(78,222,163,0.15)] rounded p-1.5 flex items-center justify-center">
+                        <i data-lucide="brain-circuit" class="w-4 h-4 text-green"></i>
+                      </div>
+                      <div>
+                        <h3 class="text-[16px] font-semibold leading-6 text-primary">AI Weather Insights</h3>
+                        <p class="mono text-[11px] tracking-[.55px] text-green leading-[14px]">Neural Spatio-Temporal Synthesis</p>
+                      </div>
+                    </div>
+                    <span class="bg-surface2 rounded-xl px-2.5 py-1 mono text-[11px] font-semibold tracking-[.55px] text-secondary shrink-0 border border-edge">v4.2.8</span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-surface2 rounded p-3 flex flex-col gap-1 border border-edge">
+                      <p class="mono text-[11px] tracking-[.55px] text-muted leading-[14px]">Detected Anomaly</p>
+                      <p class="flex items-baseline gap-1">
+                        <span id="aiAnomalyScore" class="text-[20px] font-bold text-amber">--</span>
+                        <span class="mono text-[11px] tracking-[.55px] text-muted">/ 10</span>
+                      </p>
+                      <p id="aiAnomalySeverity" class="mono text-[11px] tracking-[.55px] text-amber leading-[14px]">Evaluating…</p>
+                    </div>
+                    <div class="bg-surface2 rounded p-3 flex flex-col gap-1 border border-edge">
+                      <p class="mono text-[11px] tracking-[.55px] text-muted leading-[14px]">Model Consensus</p>
+                      <p class="flex items-baseline gap-1">
+                        <span id="aiModelConsensus" class="text-[20px] font-bold text-green">--%</span>
+                        <span class="mono text-[11px] tracking-[.55px] text-muted">Agreement</span>
+                      </p>
+                      <p class="mono text-[11px] tracking-[.55px] text-green leading-[14px]">Statistical Confidence</p>
+                    </div>
+                  </div>
+
+                  <button class="expand-toggle flex items-center justify-between py-1 text-left cursor-pointer">
+                    <span class="flex items-center gap-1.5">
+                      <i data-lucide="chart-line" class="w-3 h-3 text-bluelight"></i>
+                      <span class="text-[12px] font-semibold tracking-[0.24px] text-bluelight leading-4">Advanced Model Diagnostics (GNN Mesh &amp; Diffusion)</span>
+                    </span>
+                    <i data-lucide="chevron-down" class="chevron-icon w-2.5 h-2.5 text-secondary shrink-0"></i>
+                  </button>
+                  <div class="expand-panel">
+                    <div class="flex flex-col gap-2 pt-1 pb-1">
+                      <div class="flex items-center justify-between"><span class="mono text-[11px] text-muted tracking-[.55px]">Spectral Residual</span><span id="aiSpectralResidual" class="mono text-[11px] text-primary tracking-[.55px]">0.83</span></div>
+                      <div class="flex items-center justify-between"><span class="mono text-[11px] text-muted tracking-[.55px]">Diffusion Steps</span><span id="aiDiffusionSteps" class="mono text-[11px] text-primary tracking-[.55px]">1,000</span></div>
+                      <div class="flex items-center justify-between"><span class="mono text-[11px] text-muted tracking-[.55px]">Graph Nodes</span><span id="aiGraphNodes" class="mono text-[11px] text-primary tracking-[.55px]">48,204</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Lucide Icons -->
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.383.0/dist/umd/lucide.js"></script>
+
+<script>
+// ========================================================
+// ATWAIS APPLICATION STATE & CONTROLLER
+// ========================================================
+
+const AppState = {
+  currentLat: 13.0827,
+  currentLon: 80.2707,
+  cityName: 'Chennai',
+  weatherData: null,
+  activeLayer: 'dark', // 'dark', 'satellite', 'street'
+  radarEnabled: true,
+  isLoading: false,
+};
+
+// ========================================================
+// LEAFLET INTERACTIVE SCROLLABLE MAP SETUP
+// ========================================================
+
+let map, marker, radarLayer;
+
+// Tile Layer Configurations
+const tileLayers = {
+  dark: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    className: 'map-tiles-dark'
+  }),
+  satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 18,
+    attribution: '&copy; Esri &mdash; Earthstar Geographics'
+  }),
+  street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  })
+};
+
+function initLeafletMap() {
+  // Initialize Leaflet map with mouse scroll wheel zoom, touch pinch zoom, dragging enabled
+  map = L.map('leafletMap', {
+    center: [AppState.currentLat, AppState.currentLon],
+    zoom: 7,
+    scrollWheelZoom: true, // SCROLL TO ZOOM!
+    smoothWheelZoom: true,
+    zoomControl: false,    // Using custom ATWAIS HUD controls
+    attributionControl: true
+  });
+
+  // Add default dark tactical tile layer
+  tileLayers.dark.addTo(map);
+
+  // Setup Real-Time RainViewer Global Doppler Radar Layer
+  initRadarLayer();
+
+  // Create Custom Pulsing Beacon Marker
+  const beaconIcon = L.divIcon({
+    className: 'radar-beacon-container',
+    html: `
+      <div class="radar-beacon">
+        <div class="radar-beacon-wave"></div>
+        <div class="radar-beacon-wave radar-beacon-wave-2"></div>
+        <div class="radar-beacon-core"></div>
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
+  });
+
+  marker = L.marker([AppState.currentLat, AppState.currentLon], { icon: beaconIcon }).addTo(map);
+
+  // Bind tooltip
+  marker.bindPopup(`
+    <div class="text-xs p-1 font-sans">
+      <p class="font-bold text-bluelight text-sm">${AppState.cityName}</p>
+      <p class="mono text-muted text-[11px] mt-0.5">${AppState.currentLat.toFixed(4)}°N, ${AppState.currentLon.toFixed(4)}°E</p>
+      <p class="text-green text-[11px] mt-1">● Active Surveillance Target</p>
+    </div>
+  `);
+
+  // Map Click Listener -> Click anywhere on map to fetch weather!
+  map.on('click', (e) => {
+    const lat = e.latlng.lat;
+    const lon = e.latlng.lng;
+    updateTargetLocation(lat, lon);
+  });
+
+  // Map Zoom & Move HUD updates
+  map.on('zoomend', updateMapHud);
+  map.on('moveend', updateMapHud);
+
+  // Custom Zoom Buttons
+  document.getElementById('mapZoomInBtn')?.addEventListener('click', () => map.zoomIn());
+  document.getElementById('mapZoomOutBtn')?.addEventListener('click', () => map.zoomOut());
+  document.getElementById('mapRecenterBtn')?.addEventListener('click', () => {
+    map.flyTo([AppState.currentLat, AppState.currentLon], 8, { duration: 1 });
+  });
+
+  // Floating Layer Popup Toggle
+  const toggleBtn = document.getElementById('mapToggleLayersBtn');
+  const layerPopup = document.getElementById('layerPopup');
+  toggleBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    layerPopup?.classList.toggle('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if (layerPopup && !layerPopup.contains(e.target) && e.target !== toggleBtn) {
+      layerPopup.classList.add('hidden');
+    }
+  });
+
+  // Quick Layer Selection buttons in popup
+  document.querySelectorAll('[data-quick-layer]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const style = btn.getAttribute('data-quick-layer');
+      setBaseMapLayer(style);
+      layerPopup?.classList.add('hidden');
+    });
+  });
+
+  // Radar Doppler Toggle Checkbox
+  document.getElementById('toggleRadarCheck')?.addEventListener('change', (e) => {
+    AppState.radarEnabled = e.target.checked;
+    if (radarLayer) {
+      if (AppState.radarEnabled) {
+        radarLayer.addTo(map);
+      } else {
+        map.removeLayer(radarLayer);
+      }
+    }
+  });
+
+  updateMapHud();
+}
+
+async function initRadarLayer() {
+  try {
+    const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    if (resp.ok) {
+      const data = await resp.json();
+      const pastFrames = data.radar?.past;
+      if (pastFrames && pastFrames.length > 0) {
+        const latestFrame = pastFrames[pastFrames.length - 1].path;
+        radarLayer = L.tileLayer(`https://tilecache.rainviewer.com${latestFrame}/256/{z}/{x}/{y}/2/1_1.png`, {
+          opacity: 0.65,
+          zIndex: 10,
+          maxNativeZoom: 8,
+          maxZoom: 19
+        });
+        if (AppState.radarEnabled) {
+          radarLayer.addTo(map);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('RainViewer Doppler layer unavailable, skipping overlay:', err);
+  }
+}
+
+function setBaseMapLayer(styleName) {
+  // Remove all base tile layers
+  Object.values(tileLayers).forEach((layer) => {
+    if (map.hasLayer(layer)) map.removeLayer(layer);
+  });
+
+  // Add selected layer
+  if (tileLayers[styleName]) {
+    tileLayers[styleName].addTo(map);
+    AppState.activeLayer = styleName;
+  }
+
+  // Update Base Projection buttons in sidebar
+  document.querySelectorAll('[data-proj]').forEach((btn) => {
+    if (btn.getAttribute('data-proj') === styleName) {
+      btn.classList.add('is-active');
+    } else {
+      btn.classList.remove('is-active');
+    }
+  });
+
+  // Bring radar layer to front if enabled
+  if (AppState.radarEnabled && radarLayer && map.hasLayer(radarLayer)) {
+    radarLayer.bringToFront();
+  }
+}
+
+function updateMapHud() {
+  const zoom = map.getZoom().toFixed(1);
+  const center = map.getCenter();
+  const hudZoom = document.getElementById('hudZoomText');
+  const hudCoords = document.getElementById('hudCoordsText');
+  if (hudZoom) hudZoom.textContent = `ZOOM: ${zoom}x`;
+  if (hudCoords) hudCoords.textContent = `${center.lat.toFixed(2)}°N, ${center.lng.toFixed(2)}°E`;
+}
+
+// ========================================================
+// WEATHER API INTEGRATION & DYNAMIC RENDERING
+// ========================================================
+
+async function fetchWeatherData(lat, lon, cityName = '') {
+  AppState.isLoading = true;
+  setRefreshButtonState(true);
+
+  const query = cityName
+    ? `/api/weather?city=${encodeURIComponent(cityName)}`
+    : `/api/weather?lat=${lat}&lon=${lon}`;
+
+  let data = null;
+  const startTime = performance.now();
+
+  try {
+    // 1. Attempt Flask Backend API
+    const response = await fetch(query);
+    if (response.ok) {
+      data = await response.json();
+    } else {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+  } catch (backendError) {
+    console.warn('Flask server unavailable or error. Direct client fallback via Open-Meteo:', backendError);
+    // 2. Client-side Fallback to Open-Meteo directly (works even without backend!)
+    data = await fetchDirectOpenMeteo(lat, lon, cityName || 'Target Location');
+  }
+
+  const duration = Math.round(performance.now() - startTime);
+  const latencyEl = document.getElementById('apiLatencyLabel');
+  if (latencyEl) latencyEl.textContent = `${duration}ms`;
+
+  AppState.isLoading = false;
+  setRefreshButtonState(false);
+
+  if (data && data.status === 'success') {
+    AppState.weatherData = data;
+    renderAllData(data);
+  } else {
+    console.error('Failed to parse weather payload:', data);
+  }
+}
+
+// Client-side fallback if opened directly without app.py
+async function fetchDirectOpenMeteo(lat, lon, cityName) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=4`;
+  const res = await fetch(url);
+  const raw = await res.json();
+  const current = raw.current || {};
+  const temp_c = current.temperature_2m ?? 28;
+  const wind_kph = current.wind_speed_10m ?? 22;
+  const gust_kph = current.wind_gusts_10m ?? 35;
+  const precip_mm = current.precipitation ?? 0;
+  
+  const hourly = (raw.hourly?.time || []).slice(0, 24).map((t, i) => ({
+    time: t.split('T')[1] || `${i}:00`,
+    temp_c: raw.hourly.temperature_2m[i] ?? temp_c,
+    precip_mm: raw.hourly.precipitation[i] ?? 0,
+    rain_prob: raw.hourly.precipitation_probability[i] ?? 30
+  }));
+
+  const days = ['Today', 'Tomorrow', 'Day 3'];
+  const daily = (raw.daily?.time || []).slice(0, 3).map((t, i) => ({
+    day: days[i] || `Day ${i+1}`,
+    date: t,
+    temp_max: raw.daily.temperature_2m_max[i] ?? temp_c + 2,
+    temp_min: raw.daily.temperature_2m_min[i] ?? temp_c - 2,
+    precip_prob: raw.daily.precipitation_probability_max[i] ?? 40,
+    condition: 'Rain Showers',
+    risk: (raw.daily.precipitation_probability_max[i] ?? 40) > 60 ? 'High Risk' : 'Moderate'
+  }));
+
+  return {
+    status: 'success',
+    provider: 'openmeteo-client',
+    location: { name: cityName, lat, lon, sector: `${cityName} Surveillance Zone` },
+    current: {
+      temp_c,
+      feels_like_c: current.apparent_temperature ?? temp_c + 2,
+      temp_k: Math.round(temp_c + 273.15),
+      humidity: current.relative_humidity_2m ?? 80,
+      wind_kph,
+      wind_gust_kph: gust_kph,
+      wind_dir: current.wind_direction_10m ?? 80,
+      wind_dir_compass: 'NE',
+      pressure_hpa: current.surface_pressure ?? 1012,
+      precipitation_mm: precip_mm,
+      total_24h_precip: precip_mm * 2 + 10,
+      condition: 'Precipitation Active',
+      radar_station: 'GLOBAL-Doppler-01'
+    },
+    hourly_24h: hourly,
+    daily_3d: daily,
+    alerts: [{
+      level: 'Advisory',
+      code: 'SAT-MET-01',
+      title: 'Satellite Doppler Active',
+      desc: `Direct telemetry stream initialized for ${cityName}.`,
+      type: 'info',
+      window: 'Active',
+      expected: 'Nominal Surveillance'
+    }],
+    anomaly: {
+      score: 6.8,
+      level: 'Moderate',
+      consensus: 92,
+      thermal_deviation: '+1.8°C Above Normal',
+      spectral_residual: 0.74,
+      diffusion_steps: 1000,
+      graph_nodes: 48204
+    }
+  };
+}
+
+function updateTargetLocation(lat, lon, name = null) {
+  AppState.currentLat = lat;
+  AppState.currentLon = lon;
+
+  // Move marker smoothly
+  if (marker) {
+    marker.setLatLng([lat, lon]);
+  }
+  if (map) {
+    map.panTo([lat, lon], { animate: true, duration: 0.8 });
+  }
+
+  // Fetch weather for new location
+  fetchWeatherData(lat, lon, name || '');
+}
+
+// ========================================================
+// DOM RENDERING & TELEMETRY MAPPING
+// ========================================================
+
+function renderAllData(data) {
+  const loc = data.location || {};
+  const cur = data.current || {};
+  const anomaly = data.anomaly || {};
+  const hourly = data.hourly_24h || [];
+  const daily = data.daily_3d || [];
+  const alerts = data.alerts || [];
+
+  AppState.cityName = loc.name || 'Surveillance Target';
+
+  // 1. Header & Status
+  const coordStr = `Grid Cell: ${loc.lat}°N, ${loc.lon}°E • ${loc.name || 'Sector'}, ${loc.country || ''}`;
+  const gridCoordsEl = document.getElementById('gridCoordinatesText');
+  if (gridCoordsEl) gridCoordsEl.textContent = coordStr;
+
+  const zoneInput = document.getElementById('zoneSearchInput');
+  if (zoneInput) zoneInput.value = `${loc.name}${loc.region ? ', ' + loc.region : ''}`;
+
+  const provLabel = document.getElementById('activeProviderLabel');
+  if (provLabel) provLabel.textContent = (data.provider || 'OPENMETEO').toUpperCase();
+
+  // 2. Map Banner HUD
+  const bannerTitle = document.getElementById('bannerTitle');
+  const bannerSubtitle = document.getElementById('bannerSubtitle');
+  if (bannerTitle) {
+    bannerTitle.textContent = `${loc.name}: ${cur.condition || 'Active Telemetry'}`;
+  }
+  if (bannerSubtitle) {
+    bannerSubtitle.textContent = `Wind: ${cur.wind_kph} km/h (${cur.wind_dir_compass || 'N'}) • Rain: ${cur.total_24h_precip ?? cur.precipitation_mm} mm`;
+  }
+
+  // Update popup
+  if (marker) {
+    marker.setPopupContent(`
+      <div class="text-xs p-1 font-sans">
+        <p class="font-bold text-bluelight text-sm">${loc.name}</p>
+        <p class="text-primary font-semibold">${cur.temp_c}°C • ${cur.condition}</p>
+        <p class="mono text-muted text-[10px] mt-1">${loc.lat}°N, ${loc.lon}°E</p>
+      </div>
+    `);
+  }
+
+  // 3. Four KPI Summary Cards
+  // Target Zone
+  const kpiTarget = document.getElementById('kpiTargetZone');
+  if (kpiTarget) kpiTarget.textContent = `${loc.name}, ${loc.country || ''}`;
+  const kpiCondText = document.getElementById('kpiConditionText');
+  if (kpiCondText) kpiCondText.textContent = cur.condition || 'Clear';
+  const kpiRadar = document.getElementById('kpiRadarStation');
+  if (kpiRadar) kpiRadar.textContent = `Radar: ${cur.radar_station || 'CHN-Doppler-04'}`;
+
+  // Thermal Deviation
+  const kpiTemp = document.getElementById('kpiTempC');
+  if (kpiTemp) kpiTemp.textContent = `${cur.temp_c}°C`;
+  const kpiTempK = document.getElementById('kpiTempK');
+  if (kpiTempK) kpiTempK.textContent = `/ ${cur.temp_k} K`;
+  const kpiThermDev = document.getElementById('kpiThermalDeviation');
+  if (kpiThermDev) kpiThermDev.textContent = anomaly.thermal_deviation || '+1.5°C Normal';
+  const kpiHum = document.getElementById('kpiHumidity');
+  if (kpiHum) kpiHum.textContent = `Relative Humidity: ${cur.humidity}% • Feels: ${cur.feels_like_c}°C`;
+
+  // 24H Precipitation
+  const kpiPrecip = document.getElementById('kpiPrecipVal');
+  if (kpiPrecip) kpiPrecip.textContent = `${cur.total_24h_precip ?? cur.precipitation_mm}`;
+  const kpiPeakSurge = document.getElementById('kpiPeakSurgeText');
+  if (kpiPeakSurge) kpiPeakSurge.textContent = anomaly.peak_window || 'Peak Window Active';
+  const kpiWind = document.getElementById('kpiWindInfo');
+  if (kpiWind) kpiWind.textContent = `Wind: ${cur.wind_kph} km/h • Gusts: ${cur.wind_gust_kph} km/h`;
+
+  // Anomaly Risk Level
+  const kpiRisk = document.getElementById('kpiRiskLevelText');
+  if (kpiRisk) {
+    kpiRisk.textContent = anomaly.level || 'Low Risk';
+    if (anomaly.level === 'High Risk') {
+      kpiRisk.className = 'text-[28px] font-bold tracking-[-0.56px] text-red leading-9 pt-0.5';
+    } else if (anomaly.level === 'Moderate') {
+      kpiRisk.className = 'text-[28px] font-bold tracking-[-0.56px] text-amber leading-9 pt-0.5';
+    } else {
+      kpiRisk.className = 'text-[28px] font-bold tracking-[-0.56px] text-green leading-9 pt-0.5';
+    }
+  }
+
+  // Sidebar Controls Numbers
+  const ctrlWind = document.getElementById('ctrlWindLabel');
+  if (ctrlWind) ctrlWind.innerHTML = `${Math.round(cur.wind_kph)}<br />km/h`;
+  const ctrlTemp = document.getElementById('ctrlTempLabel');
+  if (ctrlTemp) ctrlTemp.textContent = `${Math.round(cur.temp_c)}°C`;
+  const ctrlAnomaly = document.getElementById('ctrlAnomalyLabel');
+  if (ctrlAnomaly) ctrlAnomaly.textContent = `+${anomaly.score || 4.5}σ`;
+
+  // 4. Dynamic 24-Hour SVG Trend Curve
+  renderDynamicSvgChart(hourly, anomaly.score);
+
+  // 5. 3-Day Forecast Cards
+  renderForecastCards(daily);
+
+  // 6. Active Alerts
+  renderAlerts(alerts);
+
+  // 7. AI Weather Insights
+  const aiScore = document.getElementById('aiAnomalyScore');
+  if (aiScore) aiScore.textContent = `${anomaly.score || 4.5}`;
+  const aiConsensus = document.getElementById('aiModelConsensus');
+  if (aiConsensus) aiConsensus.textContent = `${anomaly.consensus || 92}%`;
+  const aiSeverity = document.getElementById('aiAnomalySeverity');
+  if (aiSeverity) {
+    aiSeverity.textContent = anomaly.level === 'High Risk' ? 'Extreme Discrepancy' : (anomaly.level === 'Moderate' ? 'Moderate Fluctuation' : 'Nominal Stability');
+  }
+
+  // Refresh Lucide icons for dynamically injected markup
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
+// Dynamic SVG Chart Path Generator
+function renderDynamicSvgChart(hourlyData, anomalyScore) {
+  if (!hourlyData || hourlyData.length < 2) return;
+
+  const width = 700;
+  const height = 214;
+  const startX = 58;
+  const endX = 692;
+  const plotWidth = endX - startX;
+  const minY = 28;
+  const maxY = 175;
+  const plotHeight = maxY - minY;
+
+  const temps = hourlyData.map((d) => d.temp_c);
+  const minTemp = Math.min(...temps);
+  const maxTemp = Math.max(...temps);
+  const tempRange = Math.max(2, maxTemp - minTemp);
+
+  // Map data to coordinate points
+  const points = hourlyData.map((d, index) => {
+    const x = startX + (index / (hourlyData.length - 1)) * plotWidth;
+    // Higher temp or severe rain maps closer to top (minY)
+    const norm = (d.temp_c - minTemp) / tempRange;
+    const y = maxY - norm * plotHeight;
+    return { x, y, ...d };
+  });
+
+  // Generate cubic bezier curve
+  let dStroke = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const cpX1 = p0.x + (p1.x - p0.x) / 2;
+    const cpY1 = p0.y;
+    const cpX2 = p0.x + (p1.x - p0.x) / 2;
+    const cpY2 = p1.y;
+    dStroke += ` C ${cpX1.toFixed(1)} ${cpY1.toFixed(1)}, ${cpX2.toFixed(1)} ${cpY2.toFixed(1)}, ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
+  }
+
+  const dFill = `${dStroke} L ${endX} 184 L ${startX} 184 Z`;
+
+  const fillEl = document.getElementById('svgCurveFill');
+  const strokeEl = document.getElementById('svgCurveStroke');
+  if (fillEl) fillEl.setAttribute('d', dFill);
+  if (strokeEl) strokeEl.setAttribute('d', dStroke);
+
+  // Position Peak Marker at highest point
+  let highestPoint = points[0];
+  for (const pt of points) {
+    if (pt.y < highestPoint.y) highestPoint = pt;
+  }
+  const peakMarker = document.getElementById('svgPeakMarker');
+  if (peakMarker) {
+    peakMarker.setAttribute('transform', `translate(${highestPoint.x.toFixed(1)}, ${highestPoint.y.toFixed(1)})`);
+  }
+
+  // Update chart peak pill text
+  const peakText = document.getElementById('chartPeakText');
+  if (peakText) peakText.textContent = `Peak Window: ${highestPoint.time}`;
+
+  // Update X Axis Time Labels
+  const labelsContainer = document.getElementById('svgXLabels');
+  if (labelsContainer && points.length >= 6) {
+    const p0 = points[0].time;
+    const p1 = points[Math.floor(points.length * 0.25)].time;
+    const p2 = points[Math.floor(points.length * 0.5)].time;
+    const p3 = points[Math.floor(points.length * 0.75)].time;
+    const pEnd = points[points.length - 1].time;
+
+    labelsContainer.innerHTML = `
+      <text x="${startX}" y="205" text-anchor="start" class="mono" font-size="11" fill="#8c909f">${p0}</text>
+      <text x="${startX + plotWidth * 0.25}" y="205" text-anchor="middle" class="mono" font-size="11" fill="#8c909f">${p1}</text>
+      <text x="${startX + plotWidth * 0.5}" y="205" text-anchor="middle" class="mono" font-size="11" fill="#8c909f">${p2}</text>
+      <text x="${highestPoint.x.toFixed(1)}" y="205" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#ffb4ab">${highestPoint.time} (Peak)</text>
+      <text x="${startX + plotWidth * 0.75}" y="205" text-anchor="middle" class="mono" font-size="11" fill="#8c909f">${p3}</text>
+      <text x="${endX}" y="205" text-anchor="end" class="mono" font-size="11" fill="#8c909f">${pEnd}</text>
+    `;
+  }
+}
+
+// 3-Day Forecast Cards Renderer
+function renderForecastCards(dailyData) {
+  const container = document.getElementById('forecastCardsGrid');
+  if (!container) return;
+
+  container.innerHTML = dailyData.map((d, index) => {
+    const riskColor = d.risk === 'High Risk' ? 'text-red bg-[rgba(255,180,171,0.15)]' : (d.risk === 'Moderate' ? 'text-amber bg-[rgba(255,185,95,0.15)]' : 'text-green bg-[rgba(78,222,163,0.15)]');
+    const iconName = d.precip_prob > 60 ? 'cloud-rain' : (d.precip_prob > 30 ? 'cloud-drizzle' : 'cloud-sun');
+    const iconColor = d.precip_prob > 60 ? 'text-bluelight' : (d.precip_prob > 30 ? 'text-amber' : 'text-green');
+
+    return `
+      <div class="card border border-edge shadow-sm p-3 flex flex-col justify-between gap-2">
+        <div class="flex items-center justify-between">
+          <span class="mono text-[12px] font-semibold text-primary">${d.day} (${d.date})</span>
+          <i data-lucide="${iconName}" class="w-[17px] h-[17px] ${iconColor}"></i>
+        </div>
+        <p class="flex items-baseline gap-2 py-1">
+          <span class="text-[24px] font-bold text-primary leading-none">${Math.round(d.temp_max)}°</span>
+          <span class="mono text-[10px] text-muted">/ ${Math.round(d.temp_min)}°C</span>
+        </p>
+        <div class="flex items-center justify-between">
+          <span class="mono text-[10px] text-secondary">Precipitation:</span>
+          <span class="mono text-[10px] font-bold ${d.precip_prob > 50 ? 'text-red' : 'text-amber'}">${d.precip_prob}%</span>
+        </div>
+        <span class="pill ${riskColor} justify-center w-full">${d.risk}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+// Active Weather Alerts Renderer
+function renderAlerts(alerts) {
+  const container = document.getElementById('alertsContainer');
+  const summaryPill = document.getElementById('alertsSummaryPill');
+  const countBadge = document.getElementById('alertCountBadge');
+  const notifList = document.getElementById('alertNotificationList');
+
+  if (summaryPill) summaryPill.textContent = `${alerts.length} Issued`;
+  if (countBadge) countBadge.textContent = alerts.length;
+
+  if (notifList) {
+    notifList.innerHTML = alerts.map((a) => `
+      <div class="px-3 py-2 rounded-lg hover:bg-surface2 transition">
+        <p class="text-[12px] font-semibold text-primary">${a.title}</p>
+        <p class="text-[11px] mono text-muted mt-0.5">${a.code} · ${a.level}</p>
+      </div>
+    `).join('');
+  }
+
+  if (!container) return;
+
+  container.innerHTML = alerts.map((a) => {
+    const isRed = a.level.toLowerCase().includes('red') || a.level.toLowerCase().includes('warning') || a.severity === 'extreme';
+    const borderColor = isRed ? 'border-red' : 'border-amber';
+    const tagBg = isRed ? 'bg-red text-reddark' : 'bg-amber text-amberdark';
+    const iconName = isRed ? 'cloud-lightning' : 'wind';
+    const iconColor = isRed ? 'text-red' : 'text-amber';
+
+    return `
+      <div class="card border border-edge shadow-sm border-l-4 ${borderColor} pl-5 pr-4 py-4 flex flex-col gap-2">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="${tagBg} rounded-sm px-2 py-0.5 mono text-[10px] font-bold tracking-[.55px] uppercase">${a.level}</span>
+              <span class="mono text-[10px] tracking-[.55px] text-muted">${a.code}</span>
+            </div>
+            <h4 class="text-[15px] font-semibold leading-5 text-primary pt-1">${a.title}</h4>
+            <p class="text-[12px] leading-4 text-secondary mt-0.5">${a.desc}</p>
+          </div>
+          <i data-lucide="${iconName}" class="w-5 h-5 ${iconColor} shrink-0 mt-1"></i>
+        </div>
+        <div class="bg-surface2 rounded flex gap-2 p-2 border border-edge">
+          <div class="flex-1 min-w-0">
+            <p class="mono text-[10px] tracking-[.55px] text-muted">Expected Vol / Speed:</p>
+            <p class="mono text-[11px] font-bold tracking-[.55px] text-primary">${a.expected || 'Within Limits'}</p>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="mono text-[10px] tracking-[.55px] text-muted">Horizon Window:</p>
+            <p class="mono text-[11px] font-bold tracking-[.55px] text-amber">${a.window || 'Next 24 Hours'}</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <span class="flex items-center gap-1.5 mono text-[11px] tracking-[.55px] ${isRed ? 'text-red' : 'text-amber'}">
+            <span class="w-1.5 h-1.5 rounded-full ${isRed ? 'bg-red' : 'bg-amber'}"></span>Status: Live Surveillance
+          </span>
+          <button class="${isRed ? 'bg-red hover:brightness-105 text-reddark' : 'bg-surface3 hover:brightness-110 text-primary'} rounded px-3 py-1.5 text-[11px] font-semibold tracking-[0.24px] text-center transition">
+            Response Protocol
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function setRefreshButtonState(isSpinning) {
+  const btn = document.getElementById('applyFiltersBtn');
+  if (!btn) return;
+  const icon = btn.querySelector('.refresh-icon');
+  const label = btn.querySelector('.apply-label');
+  if (isSpinning) {
+    icon?.classList.add('animate-spin-infinite');
+    btn.disabled = true;
+    if (label) label.textContent = 'Syncing Telemetry…';
+  } else {
+    icon?.classList.remove('animate-spin-infinite');
+    btn.disabled = false;
+    if (label) label.textContent = 'Refresh Telemetry';
+  }
+}
+
+// ========================================================
+// SEARCH & AUTOCOMPLETE
+// ========================================================
+
+let searchDebounceTimer;
+
+function setupSearchListeners() {
+  const zoneInput = document.getElementById('zoneSearchInput');
+  const zoneResults = document.getElementById('zoneSearchResults');
+  const headerInput = document.getElementById('headerSearchInput');
+  const headerResults = document.getElementById('headerSearchResults');
+
+  function handleInput(inputEl, resultsEl) {
+    clearTimeout(searchDebounceTimer);
+    const q = inputEl.value.trim();
+    if (q.length < 2) {
+      resultsEl.classList.add('hidden');
+      return;
+    }
+
+    searchDebounceTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        let matches = [];
+        if (res.ok) {
+          matches = await res.json();
+        } else {
+          // Open-Meteo geocoding fallback
+          const fRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`);
+          const fData = await fRes.json();
+          matches = (fData.results || []).map((r) => ({
+            name: r.name,
+            region: r.admin1 || '',
+            country: r.country || '',
+            lat: r.latitude,
+            lon: r.longitude
+          }));
+        }
+
+        if (matches && matches.length > 0) {
+          resultsEl.innerHTML = matches.map((m) => `
+            <button class="search-result-item text-left px-2.5 py-1.5 rounded hover:bg-surface3 flex flex-col transition" data-lat="${m.lat}" data-lon="${m.lon}" data-name="${m.name}">
+              <span class="font-semibold text-primary">${m.name}</span>
+              <span class="mono text-[10px] text-muted">${m.region ? m.region + ', ' : ''}${m.country}</span>
+            </button>
+          `).join('');
+          resultsEl.classList.remove('hidden');
+
+          resultsEl.querySelectorAll('.search-result-item').forEach((item) => {
+            item.addEventListener('click', () => {
+              const lat = parseFloat(item.getAttribute('data-lat'));
+              const lon = parseFloat(item.getAttribute('data-lon'));
+              const name = item.getAttribute('data-name');
+              inputEl.value = name;
+              resultsEl.classList.add('hidden');
+              updateTargetLocation(lat, lon, name);
+            });
+          });
+        } else {
+          resultsEl.innerHTML = `<p class="px-2 py-1 text-muted mono">No locations found</p>`;
+          resultsEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.warn('Geocoding search failed:', err);
+      }
+    }, 280);
+  }
+
+  zoneInput?.addEventListener('input', () => handleInput(zoneInput, zoneResults));
+  headerInput?.addEventListener('input', () => handleInput(headerInput, headerResults));
+
+  // Enter key support
+  zoneInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      fetchWeatherData(AppState.currentLat, AppState.currentLon, zoneInput.value.trim());
+      zoneResults?.classList.add('hidden');
+    }
+  });
+  document.getElementById('searchSubmitBtn')?.addEventListener('click', () => {
+    fetchWeatherData(AppState.currentLat, AppState.currentLon, zoneInput.value.trim());
+    zoneResults?.classList.add('hidden');
+  });
+
+  // Close search results when clicking outside
+  document.addEventListener('click', (e) => {
+    if (zoneResults && !zoneResults.contains(e.target) && e.target !== zoneInput) {
+      zoneResults.classList.add('hidden');
+    }
+    if (headerResults && !headerResults.contains(e.target) && e.target !== headerInput) {
+      headerResults.classList.add('hidden');
+    }
+  });
+
+  // Quick City Chips
+  document.querySelectorAll('.city-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const lat = parseFloat(chip.getAttribute('data-lat'));
+      const lon = parseFloat(chip.getAttribute('data-lon'));
+      const city = chip.getAttribute('data-city');
+      updateTargetLocation(lat, lon, city);
+    });
+  });
+}
+
+// ========================================================
+// GENERAL UI LISTENERS
+// ========================================================
+
+function setupUIListeners() {
+  // Live IST Clock
+  function updateClock() {
+    const now = new Date();
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    const ist = new Date(utcMs + 5.5 * 60 * 60000);
+    const hh = String(ist.getHours()).padStart(2, '0');
+    const mm = String(ist.getMinutes()).padStart(2, '0');
+    const ss = String(ist.getSeconds()).padStart(2, '0');
+    const el = document.getElementById('syncedTime');
+    if (el) el.textContent = `${hh}:${mm}:${ss} IST`;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Mobile Drawers
+  const opsAside = document.getElementById('opsAside');
+  const weatherControls = document.getElementById('weatherControls');
+  const backdrop = document.getElementById('backdrop');
+
+  function openDrawer(el) {
+    el.classList.add('drawer-open');
+    backdrop?.classList.add('backdrop-visible');
+  }
+  function closeDrawers() {
+    opsAside?.classList.remove('drawer-open');
+    weatherControls?.classList.remove('drawer-open');
+    backdrop?.classList.remove('backdrop-visible');
+  }
+  document.getElementById('menuBtn')?.addEventListener('click', () => openDrawer(opsAside));
+  document.getElementById('filtersBtn')?.addEventListener('click', () => openDrawer(weatherControls));
+  document.getElementById('closeAsideBtn')?.addEventListener('click', closeDrawers);
+  backdrop?.addEventListener('click', closeDrawers);
+
+  // Nav links
+  document.querySelectorAll('.nav-link').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.nav-link').forEach((l) => l.classList.remove('nav-link-active'));
+      link.classList.add('nav-link-active');
+      closeDrawers();
+    });
+  });
+
+  // Base Projection Buttons in sidebar
+  document.getElementById('projDarkBtn')?.addEventListener('click', () => setBaseMapLayer('dark'));
+  document.getElementById('projSatBtn')?.addEventListener('click', () => setBaseMapLayer('satellite'));
+  document.getElementById('projStreetBtn')?.addEventListener('click', () => setBaseMapLayer('street'));
+
+  // Segmented Buttons
+  document.querySelectorAll('[data-group]').forEach((group) => {
+    const options = group.querySelectorAll('[data-option]');
+    options.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        options.forEach((b) => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+      });
+    });
+  });
+
+  // Expandable accordions
+  document.querySelectorAll('.expand-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const panel = btn.nextElementSibling;
+      const chevron = btn.querySelector('.chevron-icon');
+      const isOpen = panel.classList.toggle('expand-open');
+      if (chevron) chevron.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+    });
+  });
+
+  // Apply filters / Refresh button
+  document.getElementById('applyFiltersBtn')?.addEventListener('click', () => {
+    fetchWeatherData(AppState.currentLat, AppState.currentLon, AppState.cityName);
+  });
+
+  // Reset controls button
+  document.getElementById('resetControlsBtn')?.addEventListener('click', () => {
+    updateTargetLocation(13.0827, 80.2707, 'Chennai');
+  });
+
+  // Notification bell dropdown
+  const bellBtn = document.getElementById('bellBtn');
+  const bellDropdown = document.getElementById('bellDropdown');
+  bellBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    bellDropdown?.classList.toggle('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if (bellDropdown && !bellDropdown.contains(e.target) && e.target !== bellBtn) {
+      bellDropdown.classList.add('hidden');
+    }
+  });
+
+  // Help Button
+  document.getElementById('helpBtn')?.addEventListener('click', () => {
+    alert(`ATWAIS Weather Anomaly Tracker\n\n- Interactive Map: Use mouse wheel to scroll/zoom, click and drag to pan.\n- Live Weather Query: Click anywhere on the map to fetch real-time weather at that coordinate.\n- API Setup: Place your OpenWeatherMap key in .env or enjoy default Open-Meteo data.\n\nSee README.md for full configuration instructions.`);
+  });
+}
+
+// ========================================================
+// APPLICATION INITIALIZATION
+// ========================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+  initLeafletMap();
+  setupSearchListeners();
+  setupUIListeners();
+
+  // Initial weather fetch for default target
+  fetchWeatherData(AppState.currentLat, AppState.currentLon, AppState.cityName);
+});
+</script>
+</body>
+</html>
